@@ -1,0 +1,89 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <Adafruit_BME280.h>
+#include <utility/imumaths.h>
+#include <SoftwareSerial.h>
+#include "LoRa_E32.h"
+
+#define SEALEVELPRESSURE_HPA (1013.25)
+#define BNO055_SAMPLERATE_DELAY_MS (500)
+
+// LoRa E32 tanımı
+SoftwareSerial mySerial(2, 3); // D2: LoRa TX, D3: LoRa RX
+LoRa_E32 e32ttl(&mySerial);
+
+// Sensörler
+Adafruit_BME280 bme;
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
+// Veri yapısı
+struct SensorData {
+  float sicaklik;
+  float nem;
+  float basinc;
+  float yukseklik;
+  float ivmeX, ivmeY, ivmeZ;
+  float gyroX, gyroY, gyroZ;
+  float magX, magY, magZ;
+  char durum[3];
+};
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  // LoRa başlat
+  e32ttl.begin();
+
+  // BNO055 başlat
+  if (!bno.begin()) {
+    Serial.println("Hata: BNO055 bulunamadı!");
+    while (1);
+  }
+  bno.setExtCrystalUse(true);
+
+  // BME280 başlat
+  if (!bme.begin(0x76)) {
+    Serial.println("Hata: BME280 bulunamadı!");
+    while (1);
+  }
+
+  Serial.println("Tüm sistemler çalışıyor.");
+}
+
+void loop() {
+  SensorData data;
+
+  // BME280 verileri
+  data.sicaklik = bme.readTemperature();
+  data.nem = bme.readHumidity();
+  data.basinc = bme.readPressure() / 100.0F;
+  data.yukseklik = bme.readAltitude(SEALEVELPRESSURE_HPA);
+
+  // BNO055 verileri
+  imu::Vector<3> acc = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+  imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);
+
+  data.ivmeX = acc.x(); data.ivmeY = acc.y(); data.ivmeZ = acc.z();
+  data.gyroX = gyro.x(); data.gyroY = gyro.y(); data.gyroZ = gyro.z();
+  data.magX = mag.x(); data.magY = mag.y(); data.magZ = mag.z();
+
+  strcpy(data.durum, "OK");
+
+  // Serial yazdır
+  Serial.println("=== Veri ===");
+  Serial.print("Sıcaklık: "); Serial.println(data.sicaklik);
+  Serial.print("Nem: "); Serial.println(data.nem);
+  Serial.print("Basınç: "); Serial.println(data.basinc);
+  Serial.print("Yükseklik: "); Serial.println(data.yukseklik);
+  Serial.print("Durum: "); Serial.println(data.durum);
+
+  // LoRa gönder
+  ResponseStatus rs = e32ttl.sendFixedMessage(21, 180, 24, &data, sizeof(SensorData));
+  Serial.println(rs.getResponseDescription());
+
+  Serial.println("-------------------------\n");
+  delay(BNO055_SAMPLERATE_DELAY_MS);
+}
