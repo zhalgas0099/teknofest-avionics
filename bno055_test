@@ -1,0 +1,34 @@
+#include <Adafruit_BNO055.h>
+
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+
+  if (!bno.begin()) {
+    Serial.println("Не удалось найти BNO055. Проверьте подключение!");
+    while (1);
+  }
+
+  bno.setExtCrystalUse(true);
+  Serial.println("BNO055 готов к работе!");
+}
+
+void loop() {
+  sensors_event_t event;
+  bno.getEvent(&event);
+
+  Serial.print("Heading: ");
+  Serial.print(event.orientation.x);
+  Serial.print(" Pitch: ");
+  Serial.print(event.orientation.y);
+  Serial.print(" Roll: ");
+  Serial.println(event.orientation.z);
+
+  delay(500);
+}
